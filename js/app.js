@@ -4,7 +4,7 @@
  *   (hold Start + Select, or the remote's Back) has Save state, Load state, Press Start / Select, Restart, Exit to library. */
 (function () {
     'use strict';
-    var VERSION = '0.2.0', CHUNK = 60;
+    var VERSION = '0.3.0', CHUNK = 60;
     var DEFAULTS = {
         repos: [{ name: 'My ROMs', url: 'https://f2cfpkjp8z-alt.github.io/emulatorjs_rom_test/' }],
         systems: ['nes', 'snes', 'gb', 'gbc', 'gba', 'segaMD', 'segaMS', 'segaGG'],
@@ -404,7 +404,7 @@
             if (id === 'settings') { if (!R9Player.active()) openSettings(); return; }
             if (id === 'reload') { R9Library.forget(currentRepo() || {}); load(); return; }
             if (!R9Player.active()) return;
-            if (id === 'qsave') R9Player.quickSave().then(function (ok) { toast(ok ? t.saved : t.notSaved); });
+            if (id === 'qsave') R9Player.quickSave().then(function (r) { toast(!r ? t.notSaved : r.device ? t.saved : t.savedSession); });
             else if (id === 'qload') R9Player.quickLoad().then(function (ok) { toast(ok ? t.loaded : t.noQuick); });
             else if (id === 'start') R9Player.pressStart();
             else if (id === 'select') R9Player.pressSelect();

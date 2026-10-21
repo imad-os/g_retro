@@ -168,7 +168,9 @@ var R9Player = (function () {
             if (!a || !ready) return Promise.resolve(false);
             var snap = a.snapshot(true);
             if (!snap.state) return Promise.resolve(false);
-            return R9Saves.put(game.url, 'quick', { state: snap.state, sram: snap.sram }).then(function () { return true; }, function () { return false; });
+            var jobs = [R9Saves.put(game.url, 'quick', { state: snap.state, sram: snap.sram })];
+            if (snap.sram) jobs.push(R9Saves.put(game.url, 'sram', { sram: snap.sram }));
+            return Promise.all(jobs).then(function (r) { return { device: r[0].device }; }, function () { return false; });
         },
         quickLoad: function () {
             var a = api(), url = game && game.url;

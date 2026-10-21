@@ -74,9 +74,14 @@ Not possible here: threaded cores (they need COOP/COEP headers, which GitHub Pag
 
 ## Saves
 
-- Recently played and favourites: `MyPC.save` (per My PC profile, backed up by My PC).
-- Battery saves and save states: IndexedDB on this site, keyed by My PC profile. They are too big for `MyPC.save`
-  (64 KB per app), so they stay on the device and are not backed up.
+- **My PC (per profile, synced by My PC like every app):** recently played, favourites, settings and every game's
+  **battery save** (the game's own in-game save), compressed: a SNES battery save is about 20 bytes to a few KB.
+  My PC keeps 64 KB per app and silently drops a save that goes over, so Retro9 lets go of the battery saves played
+  longest ago before it gets there.
+- **This device:** save states (auto-save on exit, quick save). A SNES state is about 80 KB even compressed, more than
+  My PC's whole 64 KB, so states cannot go to My PC. They go to IndexedDB, or localStorage when IndexedDB is blocked
+  inside My PC, and always stay in memory while Retro9 is open (save / load works in the session even on a device that
+  keeps nothing; the toast says so).
 - The game is saved when you leave it and every time My PC's pause menu opens (so quitting from that menu keeps it).
 
 ## How it is built
