@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Retro9 player</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #000; overflow: hidden; }
+  #game { width: 100%; height: 100%; }
+  /* EmulatorJS's own menus and touch pad stay hidden: Retro9 and My PC give every control */
+  .ejs_menu_bar, .ejs_virtualGamepad_parent, .ejs_context_menu, .ejs_start_button { display: none !important; }
+</style>
+<script>
+/* Runs inside a nested frame of Retro9's page, one per game. Removing the frame is what frees the emulator's memory:
+ * EmulatorJS has no way to shut itself down. No SDK here: the page around it (index.html) owns the input and calls R9P. */
+(function () {
+    'use strict';
+    // keep every AudioContext the emulator makes, so pausing and closing really stop the sound
+    var audio = [];
+    ['AudioContext', 'webkitAudioContext'].forEach(function (n) {
+        var Orig = window[n];
+        if (!Orig) return;
+        var Wrap = function (opts) { var c = opts === undefined ? new Orig() : new Orig(opts); audio.push(c); return c; };
+        Wrap.prototype = Orig.prototype;
+        window[n] = Wrap;
+    });
+    function each(fn) { for (var i = 0; i < audio.length; i++) { try { fn(audio[i]); } catch (e) {} } }
+    function emu() { return window.EJS_emulator || null; }
+    function gm() { var e = emu(); return e && e.gameManager ? e.gameManager : null; }
+    function host() { try { return window.parent.R9Host || null; } catch (e) { return null; } }
+    function tell(ev, data) { var h = host(); if (h) h.event(ev, data); }
+    var started = false, paused = false, blobUrl = '';
+
+    function writeSram(bytes) {
+        var g = gm(), path = g.getSaveFilePath(), parts = path.split('/'), cp = '';
+        for (var i = 0; i < parts.length - 1; i++) {
+            if (!parts[i]) continue;
+            cp += '/' + parts[i];
+            if (!g.FS.analyzePath(cp).exists) g.FS.mkdir(cp);
+        }
+        if (g.FS.analyzePath(path).exists) g.FS.unlink(path);
+        g.FS.writeFile(path, bytes);
+        g.loadSaveFiles();
+    }
+
+    window.R9P = {
+        // cfg: { core, data (ArrayBuffer) or url, name, cdn, volume, sram, state }
+        boot: function (cfg) {
+            var src = cfg.url;
+            if (cfg.data) { blobUrl = URL.createObjectURL(new Blob([cfg.data])); src = blobUrl; }
+            window.EJS_player = '#game';
+            window.EJS_core = cfg.core;
+            window.EJS_gameUrl = src;
+            window.EJS_gameName = cfg.name;
+            window.EJS_pathtodata = cfg.cdn;
+            window.EJS_startOnLoaded = true;
+            window.EJS_noAutoFocus = true;
+            window.EJS_disableDatabases = true;
+            window.EJS_disableLocalStorage = true;
+            window.EJS_disableAutoLang = true;
+            window.EJS_volume = cfg.volume;
+            window.EJS_backgroundColor = '#000';
+            window.EJS_defaultControls = { 0: {}, 1: {}, 2: {}, 3: {} };     // no keyboard or pad of its own: everything comes from R9P.input
+            window.EJS_defaultOptions = { 'virtual-gamepad': 'disabled', 'shader': 'disabled' };
+            window.EJS_Buttons = {};
+            ['playPause', 'restart', 'mute', 'settings', 'fullscreen', 'saveState', 'loadState', 'screenRecord', 'gamepad', 'cheat',
+             'volumeSlider', 'saveSavFiles', 'loadSavFiles', 'quickSave', 'quickLoad', 'screenshot', 'cacheManager', 'exitEmulation',
+             'netplay', 'diskButton', 'contextMenu'].forEach(function (k) { window.EJS_Buttons[k] = false; });
+            window.EJS_onGameStart = function () {
+                started = true;
+                try { if (cfg.sram) writeSram(cfg.sram); } catch (e) { console.warn('[Retro9] battery save not restored', e); }
+                try { if (cfg.state) gm().loadState(cfg.state); } catch (e) { console.warn('[Retro9] state not restored', e); }
+                if (paused) R9P.pause();
+                tell('started');
+            };
+            var s = document.createElement('script');
+            s.src = cfg.cdn + 'loader.js';
+            s.onerror = function () { tell('error', 'emulator'); };
+            document.body.appendChild(s);
+        },
+        input: function (player, index, value) { var g = gm(); if (started && g) g.simulateInput(player, index, value); },
+        pause: function () {
+            paused = true;
+            var e = emu();
+            if (started && e) { try { e.pause(true); } catch (x) {} }
+            each(function (c) { if (c.state === 'running') c.suspend(); });
+        },
+        resume: function () {
+            paused = false;
+            var e = emu();
+            if (started && e) { try { e.play(true); } catch (x) {} }
+            each(function (c) { if (c.state === 'suspended') c.resume(); });
+        },
+        unlockAudio: function () { if (!paused) each(function (c) { if (c.state === 'suspended') c.resume(); }); },
+        setVolume: function (v) { var e = emu(); if (e && e.setVolume) e.setVolume(v); },
+        canSaveState: function () { var g = gm(); try { return !!(started && g && g.supportsStates()); } catch (e) { return false; } },
+        // { sram, state } copies taken now (state null if the core cannot save states)
+        snapshot: function (withState) {
+            var g = gm(), out = { sram: null, state: null };
+            if (!started || !g) return out;
+            try { var s = g.getSaveFile(); if (s && s.length) out.sram = new Uint8Array(s); } catch (e) {}
+            if (withState && R9P.canSaveState()) { try { out.state = g.getState(); } catch (e) {} }
+            return out;
+        },
+        loadState: function (state) { var g = gm(); if (!started || !g) return false; try { g.loadState(state); return true; } catch (e) { return false; } },
+        restart: function () { var g = gm(); if (started && g) g.restart(); },
+        // before the frame is removed: stop the loop, the sound and the GPU context
+        kill: function () {
+            var e = emu();
+            try { if (e && started) e.pause(true); } catch (x) {}
+            each(function (c) { if (c.state !== 'closed') c.close(); });
+            var cv = document.querySelectorAll('canvas');
+            for (var i = 0; i < cv.length; i++) {
+                try {
+                    var gl = cv[i].getContext('webgl2') || cv[i].getContext('webgl');
+                    var lose = gl && gl.getExtension('WEBGL_lose_context');
+                    if (lose) lose.loseContext();
+                } catch (x) {}
+            }
+            if (blobUrl) { URL.revokeObjectURL(blobUrl); blobUrl = ''; }
+        }
+    };
+})();
+</script>
+</head>
+<body>
+<div id="game"></div>
+<script>window.parent.R9Host && window.parent.R9Host.event('frame');</script>
+</body>
+</html>
