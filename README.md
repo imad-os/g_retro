@@ -14,6 +14,7 @@ Site: `https://imad-os.github.io/g_retro/` (paste it into the App Store Manager,
 | | right face button (Xbox B, PlayStation Circle, phone A) | up one folder |
 | | left face button (X) or Start | options: play, continue, quick save, favourite, delete saves |
 | | top face button (Y) | favourite on / off |
+| | Select (or My PC's menu > Settings) | speed settings |
 | | LB / RB | switch library |
 | In a game | every button, both triggers, both sticks | the emulated pad (up to 4 controllers, one player each) |
 | | hold Start + Select 1 s (or the TV remote's Back) | My PC's pause menu: Save state, Load state, Press Start, Press Select, Restart game, Exit to library |
@@ -51,6 +52,25 @@ GitHub Pages never lists folders, so a game list is the most reliable. Make one 
 Folders come from the paths. `system` is only needed when the extension does not say it (`.bin`, `.zip`), and a folder
 named after the system (`genesis/`, `snes/`, `gba/`...) also says it. A picture with the same name, or in a `boxart/`,
 `covers/` or `images/` folder next to the game, becomes its art; otherwise a card is drawn.
+
+## Speed settings
+
+Select in the library opens them; they are kept per My PC profile and apply to the next game started.
+
+| Setting | Values (lightest first, default in bold) | What it changes |
+|---|---|---|
+| Picture size | **50%**, 75%, 100% | how many pixels the emulator draws before it is stretched to the screen |
+| Audio buffer | 64, **128**, 192, 256 ms | RetroArch `audio_latency`: bigger = fewer crackles, a little more delay |
+| Sync to audio | **on**, off | RetroArch `audio_sync`: off lets the picture run free of the sound |
+| Sound | **on**, off | RetroArch `audio_enable`: off saves the sound work entirely |
+| VSync | **on**, off | EmulatorJS `vsync` |
+| WebGL 2 | **off**, on | EmulatorJS picks the WebGL 1 (legacy) or WebGL 2 build of the core |
+| SNES sound filter | off, **light**, best | snes9x `snes9x_audio_interpolation` (none / linear / gaussian) |
+| NES, Mega Drive, Master System emulator | **FCEUmm** / Nestopia, **PicoDrive** / Genesis Plus GX, **SMS Plus** / PicoDrive / Genesis Plus GX | the core used |
+| Show FPS | **off**, on | the frame rate in a corner, to compare settings |
+
+Not possible here: threaded cores (they need COOP/COEP headers, which GitHub Pages cannot send), another SNES core
+(EmulatorJS only ships snes9x) and frame skip (this snes9x build has no such option).
 
 ## Saves
 

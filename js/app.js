@@ -4,7 +4,7 @@
  *   (hold Start + Select, or the remote's Back) has Save state, Load state, Press Start / Select, Restart, Exit to library. */
 (function () {
     'use strict';
-    var VERSION = '0.1.0', CHUNK = 60;
+    var VERSION = '0.2.0', CHUNK = 60;
     var DEFAULTS = {
         repos: [{ name: 'My ROMs', url: 'https://f2cfpkjp8z-alt.github.io/emulatorjs_rom_test/' }],
         systems: ['nes', 'snes', 'gb', 'gbc', 'gba', 'segaMD', 'segaMS', 'segaGG'],
@@ -53,10 +53,10 @@
         toastTimer = setTimeout(function () { e.hidden = true; }, 2600);
     }
     // options: [{ label, fn }]; onCancel when B / Esc
-    function showDialog(title, text, options, onCancel) {
+    function showDialog(title, text, options, onCancel, cls) {
         var box = el('dialog');
         box.textContent = '';
-        var inner = make('div', 'box');
+        var inner = make('div', 'box' + (cls ? ' ' + cls : ''));
         inner.appendChild(make('h2', '', title));
         if (text) inner.appendChild(make('p', '', text));
         var rows = options.map(function (o) { var r = make('div', 'opt', o.label); inner.appendChild(r); return r; });
@@ -69,6 +69,14 @@
     function closeDialog() { dialog = null; el('dialog').hidden = true; el('dialog').textContent = ''; }
     function dialogInput(action) {
         var d = dialog;
+        var o = d.options[d.i];
+        if (o.key && (action === 'left' || action === 'right' || action === 'confirm')) {
+            R9Settings.step(o.key, action === 'left' ? -1 : 1);
+            o.label = settingLabel(o.key);
+            d.rows[d.i].textContent = o.label;
+            MyPC.announce(o.label);
+            return;
+        }
         if (action === 'up' || action === 'down') {
             d.rows[d.i].classList.remove('focus');
             d.i = (d.i + (action === 'up' ? d.options.length - 1 : 1)) % d.options.length;
@@ -257,12 +265,21 @@
         });
     }
 
+    /* ---------- settings ---------- */
+    function settingLabel(k) { var n = R9Settings.name(k); return t['set_' + k] + ':  ' + (t[n] || n); }
+    function openSettings() {
+        var opts = R9Settings.LIST.map(function (s) { return { key: s.key, label: settingLabel(s.key) }; });
+        opts.push({ label: t.resetSet, fn: function () { R9Settings.reset(); openSettings(); } });
+        opts.push({ label: t.done, fn: null });
+        showDialog(t.settings, t.setHint, opts, null, 'compact');
+    }
+
     /* ---------- playing ---------- */
     var GAME_MENU, LIB_MENU;
     function menus() {
         GAME_MENU = [{ id: 'qsave', label: t.qsave }, { id: 'qload', label: t.qload }, { id: 'start', label: t.pstart },
                      { id: 'select', label: t.pselect }, { id: 'restart', label: t.restart }, { id: 'exit', label: t.exit }];
-        LIB_MENU = [{ id: 'reload', label: t.reload }];
+        LIB_MENU = [{ id: 'settings', label: t.settings }, { id: 'reload', label: t.reload }];
     }
     // state: null = follow the autoload setting, 'fresh' = no state, or a state to load
     function launch(g, state) {
@@ -270,6 +287,7 @@
         if (MyPC.apiLevel < 9) toast(t.update);
         el('loading').textContent = fill(t.loadingGame, { name: g.name });
         el('player').hidden = false;
+        el('app').style.display = 'none';          // nothing of the library is drawn under the game
         MyPC.announce(fill(t.loadingGame, { name: g.name }));
         var rom = R9Net.get(g.url, 'arraybuffer', 180000).catch(function (e) {
             if (e && e.code === 'too-big') return null;          // over 32 MB: the emulator downloads it itself
@@ -281,10 +299,11 @@
                 var sr = st && st === (auto && auto.state) && auto.sram ? auto.sram : sram;
                 MyPC.setMenu(GAME_MENU);
                 R9Player.start(g, data, { sram: sr, state: st && st !== 'fresh' ? st : null }, {
-                    cdn: cfg.cdn, volume: volume, saveStates: cfg.saveStates, version: VERSION, loadingText: fill(t.loadingGame, { name: g.name }),
+                    cdn: cfg.cdn, volume: volume, perf: R9Settings.all(), saveStates: cfg.saveStates, version: VERSION, loadingText: fill(t.loadingGame, { name: g.name }),
                     onStarted: function () { R9Saves.played(g); },
                     onExit: function (err) {
                         MyPC.setMenu(LIB_MENU);
+                        el('app').style.display = '';
                         if (err) toast(err === 'timeout' || err === 'emulator' ? t.failEmu : t.failRom);
                         render();
                     }
@@ -295,10 +314,11 @@
             if (cfg.autoload === true) return go(auto.state);
             showDialog(t.contTitle, fill(t.contText, { date: new Date(auto.t).toLocaleString(lang) }),
                 [{ label: t.cont, fn: function () { go(auto.state); } }, { label: t.fresh, fn: function () { go(null); } }],
-                function () { el('player').hidden = true; });
+                function () { el('player').hidden = true; el('app').style.display = ''; });
         }, function (e) {
             console.warn('[Retro9] rom', e);
             el('player').hidden = true;
+            el('app').style.display = '';
             toast(t.failRom);
         });
     }
@@ -313,13 +333,14 @@
         else if (repeat) return;
         else if (action === 'confirm') activate();
         else if (action === 'cancel') back();
-        else if (action === 'menu') options();
+        else if (action === 'menu' && !/^pad/.test(dev || '')) options();
     }
     function onButton(i, pressed, value, dev) {
         if (R9Player.active() && !dialog) { R9Player.onButton(i, pressed, value, dev); return; }
         if (!pressed || dialog || !el('player').hidden) return;
         var it = focused();
-        if (i === 2) options();                                       // X (left button)
+        if (i === 2 || i === 9) options();                            // X (left button) or Start
+        else if (i === 8) openSettings();                             // Select
         else if (i === 3 && it && it.type === 'game') toggleFav(it.g); // Y (top button)
         else if (i === 4) switchRepo(-1);                             // LB
         else if (i === 5) switchRepo(1);                              // RB
@@ -340,7 +361,7 @@
             var s = make('span'); s.appendChild(diamond(p[0])); s.appendChild(document.createTextNode(p[1])); f.appendChild(s);
         });
         if (cfg.repos.length > 1) { var s = make('span'); s.appendChild(make('span', 'key', 'LB')); s.appendChild(document.createTextNode(' ')); s.appendChild(make('span', 'key', 'RB')); s.appendChild(document.createTextNode(' ' + t.switchLib)); f.appendChild(s); }
-        f.appendChild(make('span', '', t.pad));
+        var st = make('span'); st.appendChild(make('span', 'key', 'Select')); st.appendChild(document.createTextNode(' ' + t.settings)); f.appendChild(st);
     }
 
     function onResize() { if (!R9Player.active()) render(); }
@@ -356,6 +377,7 @@
             cfg = readConfig();
             repo = cfg.first;
             R9Saves.init(i);
+            R9Settings.init();
             menus();
             MyPC.setMenu(LIB_MENU);
             if (MyPC.gamepad && MyPC.gamepad.on) {
@@ -379,6 +401,7 @@
         },
         onInput: onInput,
         onMenu: function (id) {
+            if (id === 'settings') { if (!R9Player.active()) openSettings(); return; }
             if (id === 'reload') { R9Library.forget(currentRepo() || {}); load(); return; }
             if (!R9Player.active()) return;
             if (id === 'qsave') R9Player.quickSave().then(function (ok) { toast(ok ? t.saved : t.notSaved); });

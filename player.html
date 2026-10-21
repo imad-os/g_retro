@@ -43,10 +43,45 @@
         g.loadSaveFiles();
     }
 
+    // RetroArch settings EmulatorJS does not expose (audio buffer, audio sync, sound on/off): edit the retroarch.cfg it
+    // writes. EJS_GameManager is defined by the loader before the core is downloaded, so the change is in place in time.
+    var raExtra = null;
+    function patchCfg(GM) {
+        if (!GM || !GM.prototype || GM.prototype.r9Patched) return;
+        var orig = GM.prototype.getRetroArchCfg;
+        GM.prototype.r9Patched = true;
+        GM.prototype.getRetroArchCfg = function () {
+            var cfg = orig.apply(this, arguments);
+            if (!raExtra) return cfg;
+            Object.keys(raExtra).forEach(function (k) {
+                var line = k + ' = ' + raExtra[k], re = new RegExp('^' + k + ' = .*$', 'm');
+                cfg = re.test(cfg) ? cfg.replace(re, line) : cfg + line + '\n';
+            });
+            return cfg;
+        };
+    }
+    var gmClass;
+    Object.defineProperty(window, 'EJS_GameManager', {
+        configurable: true,
+        get: function () { return gmClass; },
+        set: function (v) { gmClass = v; patchCfg(v); }
+    });
+
+    // EmulatorJS's own menu settings and the core's options, from Retro9's settings
+    function ejsOptions(core, p) {
+        var o = { 'virtual-gamepad': 'disabled', 'shader': 'disabled', 'fastForward': 'disabled', 'rewindEnabled': 'disabled',
+                  'webgl2Enabled': p.webgl2 ? 'enabled' : 'disabled', 'vsync': p.vsync ? 'enabled' : 'disabled', 'fps': p.fps ? 'show' : 'hide' };
+        if (core === 'snes') o.snes9x_audio_interpolation = p.snesAudio;
+        if (core === 'nes') o.retroarch_core = p.coreNES;
+        if (core === 'segaMD') o.retroarch_core = p.coreMD;
+        if (core === 'segaMS') o.retroarch_core = p.coreMS;
+        return o;
+    }
     window.R9P = {
-        // cfg: { core, data (ArrayBuffer) or url, name, cdn, volume, sram, state }
+        // cfg: { core, data (ArrayBuffer) or url, name, cdn, volume, sram, state, perf: Retro9 settings }
         boot: function (cfg) {
-            var src = cfg.url;
+            var src = cfg.url, p = cfg.perf || {};
+            raExtra = { audio_latency: p.latency || 128, audio_sync: p.audioSync === false ? 'false' : 'true', audio_enable: p.sound === false ? 'false' : 'true' };
             if (cfg.data) { blobUrl = URL.createObjectURL(new Blob([cfg.data])); src = blobUrl; }
             window.EJS_player = '#game';
             window.EJS_core = cfg.core;
@@ -61,7 +96,7 @@
             window.EJS_volume = cfg.volume;
             window.EJS_backgroundColor = '#000';
             window.EJS_defaultControls = { 0: {}, 1: {}, 2: {}, 3: {} };     // no keyboard or pad of its own: everything comes from R9P.input
-            window.EJS_defaultOptions = { 'virtual-gamepad': 'disabled', 'shader': 'disabled' };
+            window.EJS_defaultOptions = ejsOptions(cfg.core, p);
             window.EJS_Buttons = {};
             ['playPause', 'restart', 'mute', 'settings', 'fullscreen', 'saveState', 'loadState', 'screenRecord', 'gamepad', 'cheat',
              'volumeSlider', 'saveSavFiles', 'loadSavFiles', 'quickSave', 'quickLoad', 'screenshot', 'cacheManager', 'exitEmulation',

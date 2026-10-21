@@ -127,12 +127,19 @@ var R9Player = (function () {
             opts = o; game = g; on = true; ready = false; resetInput();
             var sys = R9Systems.get(g.system);
             cfg = { core: sys.core, data: data, url: data ? '' : g.url, name: decodeURIComponent(g.url.split('/').pop().split(/[?#]/)[0]),
-                    cdn: o.cdn, volume: o.volume, sram: saves.sram || null, state: saves.state || null };
+                    cdn: o.cdn, volume: o.volume, perf: o.perf, sram: saves.sram || null, state: saves.state || null };
             el('loading').textContent = o.loadingText;
             el('player').hidden = false;
             frame = document.createElement('iframe');
             frame.setAttribute('allow', 'autoplay; gamepad');
             frame.src = 'player.html?v=' + o.version;
+            // a lower picture size: the frame is made smaller and stretched back to full screen, so the emulator renders
+            // fewer pixels (it sizes its canvas from the frame's own window)
+            var sc = o.perf && o.perf.scale;
+            if (sc > 0 && sc < 1) {
+                frame.style.width = (sc * 100) + '%'; frame.style.height = (sc * 100) + '%';
+                frame.style.transformOrigin = '0 0'; frame.style.transform = 'scale(' + (1 / sc) + ')';
+            }
             el('player').appendChild(frame);
             bootTimer = setTimeout(function () { if (!ready) fail('timeout'); }, 90000);
         },

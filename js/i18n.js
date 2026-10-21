@@ -1,6 +1,7 @@
 /* Retro9: texts in English, French, Spanish and Arabic ({name} and {date} are filled in). */
 var R9Text = {
     en: {
+        settings: 'Settings', set_scale: 'Picture size', set_latency: 'Audio buffer', set_audioSync: 'Sync to audio', set_sound: 'Sound', set_vsync: 'VSync', set_webgl2: 'WebGL 2', set_snesAudio: 'SNES sound filter', set_coreNES: 'NES emulator', set_coreMD: 'Mega Drive emulator', set_coreMS: 'Master System emulator', set_fps: 'Show FPS', vOn: 'On', vOff: 'Off', snesNone: 'Off (fastest)', snesLinear: 'Light', snesBest: 'Best (slowest)', resetSet: 'Reset to the light defaults', setHint: 'Left / right changes a value. Changes apply to the next game you start.', done: 'Done',
         recent: 'Continue playing', fav: 'Favourites', library: 'Library', open: 'Open', back: 'Back', options: 'Options',
         favourite: 'Favourite', switchLib: 'Library', loading: 'Loading…', loadingGame: 'Starting {name}…', empty: 'No games here.',
         noLib: 'This library could not be read. Check its address in the app config.', retry: 'Try again',
@@ -15,6 +16,7 @@ var R9Text = {
         pad: 'Best played with a game controller or the phone controller'
     },
     fr: {
+        settings: 'Réglages', set_scale: 'Taille de l\'image', set_latency: 'Tampon audio', set_audioSync: 'Synchro sur le son', set_sound: 'Son', set_vsync: 'VSync', set_webgl2: 'WebGL 2', set_snesAudio: 'Filtre audio SNES', set_coreNES: 'Émulateur NES', set_coreMD: 'Émulateur Mega Drive', set_coreMS: 'Émulateur Master System', set_fps: 'Afficher les FPS', vOn: 'Oui', vOff: 'Non', snesNone: 'Aucun (le plus rapide)', snesLinear: 'Léger', snesBest: 'Meilleur (le plus lent)', resetSet: 'Revenir aux réglages légers', setHint: 'Gauche / droite change une valeur. Les changements valent pour le prochain jeu lancé.', done: 'Terminé',
         recent: 'Continuer à jouer', fav: 'Favoris', library: 'Bibliothèque', open: 'Ouvrir', back: 'Retour', options: 'Options',
         favourite: 'Favori', switchLib: 'Bibliothèque', loading: 'Chargement…', loadingGame: 'Lancement de {name}…', empty: 'Aucun jeu ici.',
         noLib: 'Impossible de lire cette bibliothèque. Vérifiez son adresse dans la configuration.', retry: 'Réessayer',
@@ -29,6 +31,7 @@ var R9Text = {
         pad: 'À jouer avec une manette ou le téléphone'
     },
     es: {
+        settings: 'Ajustes', set_scale: 'Tamaño de imagen', set_latency: 'Búfer de audio', set_audioSync: 'Sincronizar con el audio', set_sound: 'Sonido', set_vsync: 'VSync', set_webgl2: 'WebGL 2', set_snesAudio: 'Filtro de sonido SNES', set_coreNES: 'Emulador NES', set_coreMD: 'Emulador Mega Drive', set_coreMS: 'Emulador Master System', set_fps: 'Mostrar FPS', vOn: 'Sí', vOff: 'No', snesNone: 'Ninguno (más rápido)', snesLinear: 'Ligero', snesBest: 'Mejor (más lento)', resetSet: 'Volver a los ajustes ligeros', setHint: 'Izquierda / derecha cambia un valor. Se aplica al próximo juego que inicies.', done: 'Listo',
         recent: 'Seguir jugando', fav: 'Favoritos', library: 'Biblioteca', open: 'Abrir', back: 'Atrás', options: 'Opciones',
         favourite: 'Favorito', switchLib: 'Biblioteca', loading: 'Cargando…', loadingGame: 'Iniciando {name}…', empty: 'No hay juegos aquí.',
         noLib: 'No se pudo leer esta biblioteca. Revisa su dirección en la configuración.', retry: 'Reintentar',
@@ -43,6 +46,7 @@ var R9Text = {
         pad: 'Mejor con un mando o con el teléfono'
     },
     ar: {
+        settings: 'الإعدادات', set_scale: 'حجم الصورة', set_latency: 'مخزن الصوت', set_audioSync: 'المزامنة مع الصوت', set_sound: 'الصوت', set_vsync: 'VSync', set_webgl2: 'WebGL 2', set_snesAudio: 'مرشح صوت SNES', set_coreNES: 'محاكي NES', set_coreMD: 'محاكي Mega Drive', set_coreMS: 'محاكي Master System', set_fps: 'إظهار FPS', vOn: 'تشغيل', vOff: 'إيقاف', snesNone: 'بدون (الأسرع)', snesLinear: 'خفيف', snesBest: 'الأفضل (الأبطأ)', resetSet: 'العودة إلى الإعدادات الخفيفة', setHint: 'يمين / يسار لتغيير القيمة. تُطبق على اللعبة التالية.', done: 'تم',
         recent: 'متابعة اللعب', fav: 'المفضلة', library: 'المكتبة', open: 'فتح', back: 'رجوع', options: 'خيارات',
         favourite: 'مفضلة', switchLib: 'المكتبة', loading: 'جارٍ التحميل…', loadingGame: 'جارٍ تشغيل {name}…', empty: 'لا توجد ألعاب هنا.',
         noLib: 'تعذرت قراءة هذه المكتبة. تحقق من عنوانها في إعدادات التطبيق.', retry: 'إعادة المحاولة',
