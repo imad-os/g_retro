@@ -1,0 +1,57 @@
+/* Retro9. Light on purpose for TVs: no blur, no big shadows, only transform / opacity change when focus moves. */
+html, body { margin: 0; height: 100%; overflow: hidden; background: #10132a; color: #fff; font-family: Arial, Helvetica, sans-serif; }
+* { box-sizing: border-box; }
+#app { position: absolute; inset: 0; display: flex; flex-direction: column; padding: 4vh 4vw 0; }
+
+header { display: flex; align-items: center; gap: 2vw; height: 8vh; flex: none; }
+#logo { font-size: 4.6vh; font-weight: 700; color: #ff5d73; white-space: nowrap; }
+#tabs { display: flex; gap: 1vw; flex: 1; overflow: hidden; align-items: center; }
+.tab { font-size: 2.8vh; padding: 0.8vh 1.6vw; border-radius: 4vh; background: #1e2447; color: #b9bfe6; white-space: nowrap; }
+.tab.on { background: #fff; color: #10132a; font-weight: 700; }
+.key { display: inline-block; min-width: 3.6vh; height: 3.6vh; line-height: 3.6vh; padding: 0 0.6vh; border-radius: 1.8vh; background: #fff;
+       color: #10132a; font-size: 2.2vh; font-weight: 700; text-align: center; vertical-align: middle; }
+#crumb { font-size: 3.2vh; color: #b9bfe6; height: 6vh; line-height: 6vh; flex: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#crumb b { color: #fff; }
+
+#scroller { flex: 1; overflow: hidden; position: relative; }
+#rows { padding: 1vh 0.5vw 6vh; }
+.sec-title { font-size: 3.2vh; font-weight: 700; margin: 1.5vh 0 1.5vh; color: #ffd23f; }
+.row { display: flex; gap: 1.6vw; overflow: hidden; padding: 1.5vh 1.5vh; }
+.row .card { flex: 0 0 calc((100% - 6.4vw) / 5); width: calc((100% - 6.4vw) / 5); }
+.grid { display: grid; grid-template-columns: repeat(var(--cols, 5), minmax(0, 1fr)); gap: 3vh 1.6vw; padding: 1.5vh 1.5vh; }
+
+.card { min-width: 0; border-radius: 1.6vh; background: #1e2447; outline: 0.6vh solid transparent; outline-offset: 0.3vh; transition: transform 0.12s; }
+.card.focus { outline-color: #ffd23f; transform: scale(1.05); will-change: transform; position: relative; z-index: 1; }
+.art { width: 100%; aspect-ratio: 1 / 1; border-radius: 1.6vh 1.6vh 0 0; overflow: hidden; background: #232a4d; position: relative; display: flex; align-items: center; justify-content: center; }
+.art img { width: 100%; height: 100%; object-fit: contain; display: block; flex: none; }
+.fav { position: absolute; top: 1vh; right: 1vh; font-size: 3.4vh; color: #ffd23f; }
+.name { font-size: 3vh; padding: 1vh 1vw 0.4vh; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sys { font-size: 2.4vh; padding: 0 1vw 1.2vh; color: #b9bfe6; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.empty { font-size: 3.4vh; color: #b9bfe6; padding: 6vh 1vw; line-height: 1.5; }
+
+footer { height: 8vh; flex: none; display: flex; gap: 2.4vw; align-items: center; font-size: 2.6vh; color: #b9bfe6; white-space: nowrap; overflow: hidden; }
+
+#dialog { position: absolute; inset: 0; z-index: 4; background: rgba(5, 7, 20, 0.86); display: flex; align-items: center; justify-content: center; }
+#dialog[hidden], #player[hidden], #toast[hidden] { display: none; }
+.box { width: 52vw; max-width: 92vw; max-height: 88vh; overflow-y: auto; background: #1e2447; border-radius: 2vh; padding: 4vh 3vw; }
+.box h2 { margin: 0 0 1vh; font-size: 4vh; }
+.box p { margin: 0 0 2.6vh; font-size: 2.8vh; color: #b9bfe6; }
+.opt { font-size: 3.2vh; padding: 1.6vh 2vw; border-radius: 1.2vh; margin-top: 1vh; background: #262d57; }
+.box.compact { padding: 2.6vh 3vw; width: 62vw; }
+.box.compact h2 { font-size: 3.4vh; }
+.box.compact p { font-size: 2.3vh; margin-bottom: 1.2vh; }
+.box.compact .opt { font-size: 2.5vh; padding: 0.75vh 1.6vw; margin-top: 0.5vh; }
+.opt.focus { background: #ffd23f; color: #10132a; font-weight: 700; }
+
+#player { position: absolute; inset: 0; background: #000; z-index: 3; }
+#player iframe { position: absolute; left: 0; top: 0; width: 100%; height: 100%; border: 0; }
+#loading { position: absolute; left: 0; right: 0; top: 44%; text-align: center; font-size: 3.6vh; color: #b9bfe6; }
+#toast { position: absolute; left: 50%; bottom: 10vh; transform: translateX(-50%); background: #fff; color: #10132a; font-size: 3vh;
+         font-weight: 700; padding: 1.6vh 3vw; border-radius: 4vh; max-width: 86vw; text-align: center; z-index: 5; }
+
+@media (max-aspect-ratio: 1/1) {
+  #app { padding: 3vh 4vw 0; }
+  .row .card { flex-basis: calc((100% - 3.2vw) / 2.4); width: calc((100% - 3.2vw) / 2.4); }
+  footer { font-size: 2vh; gap: 3vw; }
+  .box, .box.compact { width: 90vw; }
+}

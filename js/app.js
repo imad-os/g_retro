@@ -1,13 +1,13 @@
 /* Retro9: the library screen and the My PC lifecycle. Controller first:
  *   D-pad / left stick move, bottom button opens, right button goes back, left button (X) options, top button (Y) favourite,
  *   LB / RB switch library, Start options. In a game every button goes to the emulator; My PC's pause menu
- *   (hold Start + Select, or the remote's Back) has Save state, Load state, Press Start / Select, Restart, Exit to library. */
+ *   (hold Start + Select, or the remote's Back) has Save state, Load state, EmulatorJS, Press Start, Restart, Exit to library. */
 (function () {
     'use strict';
-    var VERSION = '0.3.0', CHUNK = 60;
+    var VERSION = '0.4.0', CHUNK = 60;
     var DEFAULTS = {
         repos: [{ name: 'My ROMs', url: 'https://f2cfpkjp8z-alt.github.io/emulatorjs_rom_test/' }],
-        systems: ['nes', 'snes', 'gb', 'gbc', 'gba', 'segaMD', 'segaMS', 'segaGG'],
+        systems: ['nes', 'snes', 'gb', 'gbc', 'gba', 'segaMD', 'segaMS', 'segaGG', 'n64', 'nds', 'arcade'],
         cdn: 'https://cdn.emulatorjs.org/4.2.3/data/'
     };
     var t = R9Text.en, lang = 'en', info = null, cfg = null, volume = 0.7, unsub = [];
@@ -34,11 +34,18 @@
         });
         var auto = c.autoload_last_save;
         var cdn = typeof c.emulator_cdn === 'string' && /^https:\/\//.test(c.emulator_cdn) ? c.emulator_cdn : DEFAULTS.cdn;
+        var sysList = DEFAULTS.systems.slice();
+        if (Array.isArray(c.systems_enabled)) {
+            c.systems_enabled.forEach(function (s) {
+                s = String(s);
+                if (sysList.indexOf(s) < 0) sysList.push(s);
+            });
+        }
         return {
             repos: repos,
             first: Math.max(0, Math.min(repos.length - 1, +c.default_repo || 0)),
             autoload: auto === true || auto === false ? auto : 'ask',
-            systems: Array.isArray(c.systems_enabled) ? c.systems_enabled.map(String) : DEFAULTS.systems,
+            systems: sysList,
             cdn: /\/$/.test(cdn) ? cdn : cdn + '/',
             saveStates: c.save_states !== false
         };
@@ -59,7 +66,19 @@
         var inner = make('div', 'box' + (cls ? ' ' + cls : ''));
         inner.appendChild(make('h2', '', title));
         if (text) inner.appendChild(make('p', '', text));
-        var rows = options.map(function (o) { var r = make('div', 'opt', o.label); inner.appendChild(r); return r; });
+        var rows = options.map(function (o, idx) {
+            var r = make('div', 'opt', o.label);
+            r.addEventListener('click', function (ev) {
+                ev.stopPropagation();
+                if (!dialog) return;
+                dialog.rows[dialog.i].classList.remove('focus');
+                dialog.i = idx;
+                dialog.rows[dialog.i].classList.add('focus');
+                dialogInput('confirm');
+            });
+            inner.appendChild(r);
+            return r;
+        });
         box.appendChild(inner);
         box.hidden = false;
         dialog = { options: options, rows: rows, i: 0, onCancel: onCancel };
@@ -81,6 +100,7 @@
             d.rows[d.i].classList.remove('focus');
             d.i = (d.i + (action === 'up' ? d.options.length - 1 : 1)) % d.options.length;
             d.rows[d.i].classList.add('focus');
+            d.rows[d.i].scrollIntoView({ block: 'nearest' });
             MyPC.announce(d.options[d.i].label);
         } else if (action === 'confirm') {
             var fn = d.options[d.i].fn; closeDialog(); if (fn) fn();
@@ -91,6 +111,15 @@
 
     /* ---------- the library screen ---------- */
     function currentRepo() { return cfg.repos[repo] || null; }
+    function isEnabled(g) {
+        var sys = R9Saves.getSystem(g.url) || g.system;
+        return sys === 'auto' || cfg.systems.indexOf(sys) >= 0;
+    }
+    function sysLabel(g) {
+        var sys = R9Saves.getSystem(g.url) || g.system;
+        if (sys === 'auto') return t.sysAuto;
+        return (R9Systems.get(sys) || {}).label || '';
+    }
     function load() {
         var r = currentRepo(), seq = ++loadSeq;
         listing = null; listErr = '';
@@ -107,48 +136,52 @@
         });
     }
     function buildSections() {
-        var out = [], enabled = function (g) { return cfg.systems.indexOf(g.system) >= 0; };
+        var out = [];
         if (!path) {
-            var rec = R9Saves.recent().filter(enabled), fav = R9Saves.favourites().filter(enabled);
+            var rec = R9Saves.recent().filter(isEnabled), fav = R9Saves.favourites().filter(isEnabled);
             if (rec.length) out.push({ title: t.recent, row: true, items: rec.map(function (g) { return { type: 'game', g: g }; }) });
             if (fav.length) out.push({ title: t.fav, row: true, items: fav.map(function (g) { return { type: 'game', g: g }; }) });
         }
         var items = [];
         if (listState === 'ok') {
             listing.folders.forEach(function (f) { items.push({ type: 'folder', f: f }); });
-            listing.games.filter(enabled).forEach(function (g) { items.push({ type: 'game', g: g }); });
+            listing.games.filter(isEnabled).forEach(function (g) { items.push({ type: 'game', g: g }); });
         } else if (listState === 'error') {
             items.push({ type: 'retry' });
         }
         out.push({ title: path ? path.split('/').pop() : (currentRepo() ? currentRepo().name : t.library), row: false, items: items, shown: 0 });
         return out;
     }
-    function card(it) {
+    function card(it, sIdx, iIdx) {
         var c = make('div', 'card'), art = make('div', 'art'), img = make('img');
         img.decoding = 'async'; img.alt = '';
+        c.addEventListener('click', function () {
+            if (dialog || !el('player').hidden) return;
+            if (typeof sIdx === 'number' && typeof iIdx === 'number') setFocus(sIdx, iIdx, true);
+            activate();
+        });
         if (it.type === 'folder') { img.src = R9Art.FOLDER; c.appendChild(art); art.appendChild(img); c.appendChild(make('div', 'name', it.f.name)); c.appendChild(make('div', 'sys', ' ')); return c; }
         if (it.type === 'retry') { img.src = R9Art.RETRY; c.appendChild(art); art.appendChild(img); c.appendChild(make('div', 'name', t.retry)); c.appendChild(make('div', 'sys', String(listErr))); return c; }
-        var g = it.g, fallback = R9Art.game(g.name, g.system);
-        img.loading = 'lazy';
-        img.src = g.art || fallback;
-        img.onerror = function () { img.onerror = null; img.src = fallback; };
+        var g = it.g;
+        // All game files in the navigator use the same fixed-size icon geometry as folders
+        img.src = R9Art.FILE;
         art.appendChild(img);
         if (R9Saves.isFav(g)) art.appendChild(make('span', 'fav', '★'));
         c.appendChild(art);
         c.appendChild(make('div', 'name', g.name));
-        c.appendChild(make('div', 'sys', (R9Systems.get(g.system) || {}).label || ''));
+        c.appendChild(make('div', 'sys', sysLabel(g)));
         return c;
     }
     // grids are drawn in chunks: a folder of 2000 games never puts 2000 cards on the page
     function growGrid(s, upTo) {
         var sec = sections[s];
-        if (sec.row || sec.shown >= sec.items.length || upTo < sec.shown) return;
+        if (!sec || sec.row || sec.shown >= sec.items.length || upTo < sec.shown) return;
         var end = Math.min(sec.items.length, Math.max(upTo + 1, sec.shown + CHUNK));
-        for (var i = sec.shown; i < end; i++) sec.box.appendChild(sec.cards[i] = card(sec.items[i]));
+        for (var i = sec.shown; i < end; i++) sec.box.appendChild(sec.cards[i] = card(sec.items[i], s, i));
         sec.shown = end;
     }
     function render() {
-        var keep = remembered[repo + '|' + path] || { s: 99, i: 0 };
+        var keep = remembered[repo + '|' + path] || { s: 0, i: 0 };
         sections = buildSections();
         // header: library tabs and where we are
         var tabs = el('tabs'); tabs.textContent = '';
@@ -163,11 +196,11 @@
         parts.forEach(function (p) { crumb.appendChild(document.createTextNode('  ›  ' + p)); });
         // sections
         var rows = el('rows'); rows.textContent = '';
-        sections.forEach(function (sec) {
+        sections.forEach(function (sec, sIdx) {
             rows.appendChild(make('div', 'sec-title', sec.title));
             sec.box = make('div', sec.row ? 'row' : 'grid');
             sec.cards = [];
-            if (sec.row) sec.items.forEach(function (it) { sec.box.appendChild(card(it)); sec.cards.push(sec.box.lastChild); });
+            if (sec.row) sec.items.forEach(function (it, iIdx) { sec.box.appendChild(card(it, sIdx, iIdx)); sec.cards.push(sec.box.lastChild); });
             else sec.box.style.setProperty('--cols', cols());
             rows.appendChild(sec.box);
         });
@@ -181,7 +214,7 @@
         while (s > 0 && !sections[s].items.length) s--;
         if (!sections[s].items.length) for (s = 0; s < sections.length && !sections[s].items.length; s++);
         if (s >= sections.length) { focus = { s: -1, i: 0 }; el('scroller').scrollTop = 0; return; }
-        if (!sections[sections.length - 1].row) growGrid(sections.length - 1, keep.i);
+        if (!sections[sections.length - 1].row) growGrid(sections.length - 1, s === sections.length - 1 ? keep.i : 0);
         setFocus(s, Math.min(keep.s === s ? keep.i : 0, sections[s].items.length - 1), true);
     }
     function setFocus(s, i, quiet) {
@@ -205,7 +238,7 @@
         }
         if (!quiet) MyPC.announce(label(sections[s].items[i]));
     }
-    function label(it) { return it.type === 'folder' ? it.f.name : it.type === 'retry' ? t.retry : it.g.name + ', ' + ((R9Systems.get(it.g.system) || {}).label || ''); }
+    function label(it) { return it.type === 'folder' ? it.f.name : it.type === 'retry' ? t.retry : it.g.name + ', ' + sysLabel(it.g); }
     function focused() { return focus.s >= 0 && sections[focus.s] ? sections[focus.s].items[focus.i] : null; }
 
     function move(dir) {
@@ -261,7 +294,7 @@
             opts.push({ label: R9Saves.isFav(g) ? t.remFav : t.addFav, fn: function () { toggleFav(g); } });
             opts.push({ label: t.delSaves, fn: function () { R9Saves.remove(g.url).then(function () { toast(t.deleted); }); } });
             opts.push({ label: t.cancel, fn: null });
-            showDialog(g.name, (R9Systems.get(g.system) || {}).label || '', opts, null);
+            showDialog(g.name, sysLabel(g), opts, null);
         });
     }
 
@@ -277,13 +310,25 @@
     /* ---------- playing ---------- */
     var GAME_MENU, LIB_MENU;
     function menus() {
-        GAME_MENU = [{ id: 'qsave', label: t.qsave }, { id: 'qload', label: t.qload }, { id: 'start', label: t.pstart },
-                     { id: 'select', label: t.pselect }, { id: 'restart', label: t.restart }, { id: 'exit', label: t.exit }];
-        LIB_MENU = [{ id: 'settings', label: t.settings }, { id: 'reload', label: t.reload }];
+        // My PC setMenu allows up to 6 items: include "EmulatorJS" to trigger the built-in EmulatorJS settings menu
+        GAME_MENU = [
+            { id: 'qsave', label: t.qsave },
+            { id: 'qload', label: t.qload },
+            { id: 'ejs', label: t.ejsMenu },
+            { id: 'start', label: t.pstart },
+            { id: 'restart', label: t.restart },
+            { id: 'exit', label: t.exit }
+        ];
+        LIB_MENU = [
+            { id: 'settings', label: t.settings },
+            { id: 'ejs', label: t.ejsMenu },
+            { id: 'reload', label: t.reload }
+        ];
     }
     // state: null = follow the autoload setting, 'fresh' = no state, or a state to load
     function launch(g, state) {
-        if (cfg.systems.indexOf(g.system) < 0 || !R9Systems.get(g.system)) { toast(t.off); return; }
+        var knownSys = R9Saves.getSystem(g.url) || g.system;
+        if (knownSys !== 'auto' && (cfg.systems.indexOf(knownSys) < 0 || !R9Systems.get(knownSys))) { toast(t.off); return; }
         if (MyPC.apiLevel < 9) toast(t.update);
         el('loading').textContent = fill(t.loadingGame, { name: g.name });
         el('player').hidden = false;
@@ -295,12 +340,31 @@
         });
         Promise.all([rom, R9Saves.get(g.url, 'sram'), state === null ? R9Saves.get(g.url, 'auto') : Promise.resolve(null)]).then(function (r) {
             var data = r[0], sram = r[1] && r[1].sram, auto = r[2];
+            var detected = data ? R9Systems.detectRom(data, g.path || g.url) : (knownSys !== 'auto' ? knownSys : R9Systems.detect(g.path || g.url));
+            if (detected === 'invalid') {
+                el('player').hidden = true;
+                el('app').style.display = '';
+                toast(t.failRom);
+                return;
+            }
+            var sysId = (detected && R9Systems.get(detected)) ? detected : (knownSys !== 'auto' && R9Systems.get(knownSys) ? knownSys : 'nes');
+            if (g.system !== sysId || R9Saves.getSystem(g.url) !== sysId) {
+                R9Saves.setSystem(g.url, sysId);
+                g.system = sysId;
+            }
+            if (cfg.systems.indexOf(sysId) < 0 || !R9Systems.get(sysId)) {
+                el('player').hidden = true;
+                el('app').style.display = '';
+                toast(t.off);
+                return;
+            }
+            var gameObj = { name: g.name, url: g.url, art: g.art, system: sysId, path: g.path };
             var go = function (st) {
                 var sr = st && st === (auto && auto.state) && auto.sram ? auto.sram : sram;
                 MyPC.setMenu(GAME_MENU);
-                R9Player.start(g, data, { sram: sr, state: st && st !== 'fresh' ? st : null }, {
+                R9Player.start(gameObj, data, { sram: sr, state: st && st !== 'fresh' ? st : null }, {
                     cdn: cfg.cdn, volume: volume, perf: R9Settings.all(), saveStates: cfg.saveStates, version: VERSION, loadingText: fill(t.loadingGame, { name: g.name }),
-                    onStarted: function () { R9Saves.played(g); },
+                    onStarted: function () { R9Saves.played(gameObj); },
                     onExit: function (err) {
                         MyPC.setMenu(LIB_MENU);
                         el('app').style.display = '';
@@ -402,6 +466,11 @@
         onInput: onInput,
         onMenu: function (id) {
             if (id === 'settings') { if (!R9Player.active()) openSettings(); return; }
+            if (id === 'ejs') {
+                if (R9Player.active()) R9Player.openEjsMenu();
+                else openSettings();
+                return;
+            }
             if (id === 'reload') { R9Library.forget(currentRepo() || {}); load(); return; }
             if (!R9Player.active()) return;
             if (id === 'qsave') R9Player.quickSave().then(function (r) { toast(!r ? t.notSaved : r.device ? t.saved : t.savedSession); });

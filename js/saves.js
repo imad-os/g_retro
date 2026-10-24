@@ -9,11 +9,15 @@
 var R9Saves = (function () {
     'use strict';
     var MAX_RECENT = 12, MAX_FAV = 40, BUDGET = 56000;
-    var prefs = { recent: [], fav: [] }, profile = 'p', mem = {}, cloud = {}, tier = null;
+    var prefs = { recent: [], fav: [], sys: {} }, profile = 'p', mem = {}, cloud = {}, tier = null;
 
     function entry(g) { return { u: g.url, n: g.name, s: g.system, a: /^data:/.test(g.art || '') ? '' : (g.art || ''), p: g.path || '' }; }
-    function game(e) { return { url: e.u, name: e.n, system: e.s, art: e.a, path: e.p }; }
-    function storePrefs() { MyPC.save('lib', { recent: prefs.recent, fav: prefs.fav }); }
+    function game(e) {
+        var det = R9Systems.detect(e.p || e.u);
+        var sys = prefs.sys[e.u] || (det && det !== 'auto' ? det : e.s);
+        return { url: e.u, name: e.n, system: sys, art: e.a, path: e.p };
+    }
+    function storePrefs() { MyPC.save('lib', { recent: prefs.recent, fav: prefs.fav, sysAuto: prefs.sys }); }
     // a short key for a game: FNV-1a of its address
     function rk(url) { var h = 0x811c9dc5; for (var i = 0; i < url.length; i++) { h ^= url.charCodeAt(i); h = Math.imul(h, 16777619) >>> 0; } return h.toString(36); }
 
@@ -49,14 +53,13 @@ var R9Saves = (function () {
     function idb() {
         if (dbp) return dbp;
         dbp = new Promise(function (resolve, reject) {
-            if (!window.indexedDB) return reject(new Error('no IndexedDB'));
-            var req;
-            try { req = indexedDB.open('retro9', 2); } catch (e) { return reject(e); }
+            if (!window.indexedDB) { dbp = null; return reject(new Error('no IndexedDB')); }
+            var req, timer = setTimeout(function () { dbp = null; reject(new Error('timeout')); }, 3000);
+            try { req = indexedDB.open('retro9', 2); } catch (e) { clearTimeout(timer); dbp = null; return reject(e); }
             req.onupgradeneeded = function () { var d = req.result; if (!d.objectStoreNames.contains('saves')) d.createObjectStore('saves'); };
-            req.onsuccess = function () { resolve(req.result); };
-            req.onerror = function () { reject(req.error); };
-            req.onblocked = function () { reject(new Error('blocked')); };
-            setTimeout(function () { reject(new Error('timeout')); }, 3000);
+            req.onsuccess = function () { clearTimeout(timer); resolve(req.result); };
+            req.onerror = function () { clearTimeout(timer); dbp = null; reject(req.error); };
+            req.onblocked = function () { clearTimeout(timer); dbp = null; reject(new Error('blocked')); };
         });
         return dbp;
     }
@@ -89,7 +92,7 @@ var R9Saves = (function () {
                 try { localStorage.setItem(lkey(k), val); return true; } catch (e) {
                     // full: drop the oldest states on this device and try once more
                     var old = [];
-                    for (var i = 0; i < localStorage.length; i++) { var n = localStorage.key(i); if (n.indexOf('r9|') === 0 && n !== lkey(k)) old.push(n); }
+                    for (var i = 0; i < localStorage.length; i++) { var n = localStorage.key(i); if (n && n.indexOf('r9|') === 0 && n !== lkey(k)) old.push(n); }
                     old.slice(0, Math.ceil(old.length / 2)).forEach(function (n) { localStorage.removeItem(n); });
                     try { localStorage.setItem(lkey(k), val); return true; } catch (e2) { return false; }
                 }
@@ -122,12 +125,21 @@ var R9Saves = (function () {
             var v = MyPC.load('lib', null);
             if (v && Array.isArray(v.recent)) prefs.recent = v.recent.slice(0, MAX_RECENT);
             if (v && Array.isArray(v.fav)) prefs.fav = v.fav.slice(0, MAX_FAV);
+            if (v && v.sysAuto && typeof v.sysAuto === 'object') prefs.sys = v.sysAuto;
             var c = MyPC.load('sv', null);
             cloud = c && typeof c === 'object' ? c : {};
             device();
         },
         recent: function () { return prefs.recent.map(game); },
         favourites: function () { return prefs.fav.map(game); },
+        getSystem: function (url) { return prefs.sys[url] || ''; },
+        setSystem: function (url, sysId) {
+            if (!url || !sysId) return;
+            prefs.sys[url] = sysId;
+            prefs.recent.forEach(function (e) { if (e.u === url) e.s = sysId; });
+            prefs.fav.forEach(function (e) { if (e.u === url) e.s = sysId; });
+            storePrefs();
+        },
         played: function (g) {
             prefs.recent = [entry(g)].concat(prefs.recent.filter(function (e) { return e.u !== g.url; })).slice(0, MAX_RECENT);
             storePrefs();

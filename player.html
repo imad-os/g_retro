@@ -7,8 +7,12 @@
 <style>
   html, body { margin: 0; height: 100%; background: #000; overflow: hidden; }
   #game { width: 100%; height: 100%; }
-  /* EmulatorJS's own menus and touch pad stay hidden: Retro9 and My PC give every control */
-  .ejs_menu_bar, .ejs_virtualGamepad_parent, .ejs_context_menu, .ejs_start_button { display: none !important; }
+  /* Virtual pad, context menu and start overlay stay hidden; the menu bar stays in layout so EmulatorJS can measure
+   * its built-in settings menu at startup, and becomes visible when "EmulatorJS" is triggered from the My PC menu. */
+  .ejs_virtualGamepad_parent, .ejs_context_menu, .ejs_start_button { display: none !important; }
+  body:not(.r9-ejs-open) .ejs_menu_bar { opacity: 0 !important; pointer-events: none !important; }
+  body.r9-ejs-open .ejs_menu_bar { opacity: 1 !important; pointer-events: auto !important; }
+  .r9-ejs-focus { outline: 2px solid #ffd23f !important; outline-offset: -2px !important; background: rgba(255, 210, 63, 0.25) !important; }
 </style>
 <script>
 /* Runs inside a nested frame of Retro9's page, one per game. Removing the frame is what frees the emulator's memory:
@@ -29,7 +33,7 @@
     function gm() { var e = emu(); return e && e.gameManager ? e.gameManager : null; }
     function host() { try { return window.parent.R9Host || null; } catch (e) { return null; } }
     function tell(ev, data) { var h = host(); if (h) h.event(ev, data); }
-    var started = false, paused = false, blobUrl = '';
+    var started = false, paused = false, blobUrl = '', focusIdx = 0;
 
     function writeSram(bytes) {
         var g = gm(), path = g.getSaveFilePath(), parts = path.split('/'), cp = '';
@@ -60,23 +64,82 @@
             return cfg;
         };
     }
-    var gmClass;
+    var gmClass, ejsClass;
     Object.defineProperty(window, 'EJS_GameManager', {
         configurable: true,
         get: function () { return gmClass; },
         set: function (v) { gmClass = v; patchCfg(v); }
     });
+    function patchEjs(EJS) {
+        if (!EJS || !EJS.prototype || EJS.prototype.r9Patched) return;
+        var origErr = EJS.prototype.startGameError;
+        EJS.prototype.r9Patched = true;
+        EJS.prototype.startGameError = function (msg) {
+            if (origErr) { try { origErr.apply(this, arguments); } catch (e) {} }
+            tell('error', 'emulator');
+        };
+    }
+    Object.defineProperty(window, 'EmulatorJS', {
+        configurable: true,
+        get: function () { return ejsClass; },
+        set: function (v) { ejsClass = v; patchEjs(v); }
+    });
 
     // EmulatorJS's own menu settings and the core's options, from Retro9's settings
     function ejsOptions(core, p) {
-        var o = { 'virtual-gamepad': 'disabled', 'shader': 'disabled', 'fastForward': 'disabled', 'rewindEnabled': 'disabled',
-                  'webgl2Enabled': p.webgl2 ? 'enabled' : 'disabled', 'vsync': p.vsync ? 'enabled' : 'disabled', 'fps': p.fps ? 'show' : 'hide' };
+        var o = {
+            'virtual-gamepad': 'disabled',
+            'shader': p.shader || 'disabled',
+            'webgl2Enabled': p.webgl2 ? 'enabled' : 'disabled',
+            'vsync': p.vsync ? 'enabled' : 'disabled',
+            'fps': p.fps ? 'show' : 'hide'
+        };
+        if (p.fastForward) o.fastForward = 'enabled';
+        if (p.rewind) o.rewindEnabled = 'enabled';
         if (core === 'snes') o.snes9x_audio_interpolation = p.snesAudio;
         if (core === 'nes') o.retroarch_core = p.coreNES;
         if (core === 'segaMD') o.retroarch_core = p.coreMD;
         if (core === 'segaMS') o.retroarch_core = p.coreMS;
         return o;
     }
+
+    /* ---------- controller navigation for EmulatorJS's built-in settings menu ---------- */
+    function activeSettingsPanel() {
+        var e = emu();
+        if (!e || !e.settingsMenu) return null;
+        var tr = e.settingsMenu.querySelector('.ejs_settings_transition');
+        if (!tr) return null;
+        for (var i = 0; i < tr.children.length; i++) {
+            if (!tr.children[i].hasAttribute('hidden')) return tr.children[i];
+        }
+        return null;
+    }
+    function settingsRows(panel) {
+        if (!panel) return [];
+        var list = panel.querySelectorAll('.ejs_settings_main_bar, button.ejs_option_row');
+        var out = [];
+        for (var i = 0; i < list.length; i++) out.push(list[i]);
+        return out;
+    }
+    function clearSettingsFocus() {
+        var old = document.querySelectorAll('.r9-ejs-focus');
+        for (var i = 0; i < old.length; i++) old[i].classList.remove('r9-ejs-focus');
+    }
+    function syncSettingsFocus() {
+        clearSettingsFocus();
+        var panel = activeSettingsPanel(), rows = settingsRows(panel);
+        if (!rows.length) return;
+        if (focusIdx < 0 || focusIdx >= rows.length) focusIdx = 0;
+        var row = rows[focusIdx];
+        row.classList.add('r9-ejs-focus');
+        var sc = panel.classList.contains('ejs_setting_menu') ? panel : panel.querySelector('.ejs_setting_menu');
+        if (sc) {
+            var top = row.offsetTop, h = row.offsetHeight;
+            if (top < sc.scrollTop) sc.scrollTop = top;
+            else if (top + h > sc.scrollTop + sc.clientHeight) sc.scrollTop = top + h - sc.clientHeight;
+        }
+    }
+
     window.R9P = {
         // cfg: { core, data (ArrayBuffer) or url, name, cdn, volume, sram, state, perf: Retro9 settings }
         boot: function (cfg) {
@@ -98,9 +161,10 @@
             window.EJS_defaultControls = { 0: {}, 1: {}, 2: {}, 3: {} };     // no keyboard or pad of its own: everything comes from R9P.input
             window.EJS_defaultOptions = ejsOptions(cfg.core, p);
             window.EJS_Buttons = {};
-            ['playPause', 'restart', 'mute', 'settings', 'fullscreen', 'saveState', 'loadState', 'screenRecord', 'gamepad', 'cheat',
+            ['playPause', 'restart', 'mute', 'fullscreen', 'saveState', 'loadState', 'screenRecord', 'gamepad', 'cheat',
              'volumeSlider', 'saveSavFiles', 'loadSavFiles', 'quickSave', 'quickLoad', 'screenshot', 'cacheManager', 'exitEmulation',
              'netplay', 'diskButton', 'contextMenu'].forEach(function (k) { window.EJS_Buttons[k] = false; });
+            window.EJS_Buttons.settings = true;
             window.EJS_onGameStart = function () {
                 started = true;
                 try { if (cfg.sram) writeSram(cfg.sram); } catch (e) { console.warn('[Retro9] battery save not restored', e); }
@@ -114,6 +178,78 @@
             document.body.appendChild(s);
         },
         input: function (player, index, value) { var g = gm(); if (started && g) g.simulateInput(player, index, value); },
+        isSettingsOpen: function () {
+            var e = emu();
+            var open = !!(started && e && e.settingsMenuOpen && e.settingsMenu && e.settingsMenu.style.display !== 'none');
+            if (!open && document.body.classList.contains('r9-ejs-open')) {
+                clearSettingsFocus();
+                document.body.classList.remove('r9-ejs-open');
+            }
+            return open;
+        },
+        openSettings: function () {
+            var e = emu();
+            if (!started || !e || !e.settingsMenu) return false;
+            document.body.classList.add('r9-ejs-open');
+            if (e.menu && e.menu.open) e.menu.open(true);
+            if (e.elements && e.elements.menu) e.elements.menu.classList.remove('ejs_menu_bar_hidden');
+            if (!e.settingsMenuOpen) {
+                var btn = e.settingParent && e.settingParent.querySelector('button, .ejs_menu_button');
+                if (btn) btn.click();
+                else {
+                    e.settingsMenuOpen = true;
+                    e.settingsMenu.style.display = '';
+                }
+            }
+            if (e.handleSettingsResize) e.handleSettingsResize();
+            focusIdx = 0;
+            syncSettingsFocus();
+            return true;
+        },
+        closeSettings: function () {
+            var e = emu();
+            clearSettingsFocus();
+            document.body.classList.remove('r9-ejs-open');
+            if (e && e.closeSettingsMenu) e.closeSettingsMenu();
+            if (e && e.menu && e.menu.close) e.menu.close();
+        },
+        settingsInput: function (action) {
+            if (!R9P.isSettingsOpen()) return false;
+            var panel = activeSettingsPanel(), rows = settingsRows(panel);
+            if (action === 'up' || action === 'down') {
+                if (!rows.length) return true;
+                focusIdx = (focusIdx + (action === 'up' ? rows.length - 1 : 1)) % rows.length;
+                syncSettingsFocus();
+                return true;
+            }
+            if (action === 'confirm' || action === 'right') {
+                if (!rows.length) return true;
+                var target = rows[focusIdx] || rows[0];
+                var isSub = target.classList.contains('ejs_settings_main_bar');
+                target.click();
+                if (isSub) {
+                    var nextPanel = activeSettingsPanel(), nextRows = settingsRows(nextPanel);
+                    focusIdx = 0;
+                    for (var i = 0; i < nextRows.length; i++) {
+                        if (nextRows[i].classList.contains('ejs_option_row_selected')) { focusIdx = i; break; }
+                    }
+                }
+                syncSettingsFocus();
+                return true;
+            }
+            if (action === 'cancel' || action === 'left') {
+                var back = panel && panel.querySelector('.ejs_back_button');
+                if (back) {
+                    back.click();
+                    focusIdx = 0;
+                    syncSettingsFocus();
+                } else if (action === 'cancel') {
+                    R9P.closeSettings();
+                }
+                return true;
+            }
+            return true;
+        },
         pause: function () {
             paused = true;
             var e = emu();

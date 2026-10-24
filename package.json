@@ -1,0 +1,12 @@
+{
+  "name": "retro9",
+  "version": "0.4.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node tools/dev-server.mjs",
+    "start": "node tools/dev-server.mjs",
+    "build": "node tools/build.mjs",
+    "lint": "node tools/dev-server.mjs --check"
+  }
+}

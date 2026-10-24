@@ -30,9 +30,19 @@ var R9Player = (function () {
         }
     }
     function tap(idx) { send(0, idx, 1); setTimeout(function () { send(0, idx, 0); }, 160); }
+    function ejsMenuOpen() { var a = api(); return !!(a && ready && a.isSettingsOpen && a.isSettingsOpen()); }
 
+    var PAD_DIRS = { 12: 'up', 13: 'down', 14: 'left', 15: 'right' };
     function onButton(i, pressed, value, dev) {
         if (!on || paused) return;
+        if (ejsMenuOpen()) {
+            if (!pressed) return;
+            var a = api();
+            if (PAD_DIRS[i]) a.settingsInput(PAD_DIRS[i]);
+            else if (i === 0) a.settingsInput('confirm');
+            else if (i === 1 || i === 8 || i === 9) a.settingsInput('cancel');
+            return;
+        }
         var pl = playerOf(dev);
         if (pl < 0 || i === 16) return;                                 // 16 = Home: My PC's
         if (i >= 12 && i <= 15) { dpad[pl][i - 12] = pressed ? 1 : 0; flushDir(pl); return; }
@@ -40,7 +50,7 @@ var R9Player = (function () {
         if (idx >= 0) send(pl, idx, pressed ? 1 : 0);
     }
     function onAxes(a, dev) {
-        if (!on || paused) return;
+        if (!on || paused || ejsMenuOpen()) return;
         var pl = playerOf(dev);
         if (pl < 0) return;
         var sys = R9Systems.get(game.system);
@@ -66,11 +76,16 @@ var R9Player = (function () {
     // keyboard (standalone), TV remote arrows and My PC's touch pad: player 1
     var DIRS = { up: 0, down: 1, left: 2, right: 3 };
     function onAction(action, pressed, repeat, dev) {
-        if (!on || paused || repeat || /^pad/.test(dev || '')) return;   // controllers come through onButton
+        if (!on || paused) return;
+        if (ejsMenuOpen()) {
+            if (pressed && !/^pad/.test(dev || '')) api().settingsInput(action);
+            return;
+        }
+        if (repeat || /^pad/.test(dev || '')) return;                   // controllers come through onButton
         if (DIRS[action] !== undefined) { keys[0][DIRS[action]] = pressed ? 1 : 0; flushDir(0); return; }
         if (action === 'confirm') send(0, 0, pressed ? 1 : 0);          // bottom button / OK
         else if (action === 'cancel') send(0, 8, pressed ? 1 : 0);      // right button
-        else if (action === 'menu' && pressed) tap(3);                    // touch pad X / Start
+        else if (action === 'menu' && pressed) tap(3);                  // touch pad X / Start
     }
 
     function close() {
@@ -142,6 +157,11 @@ var R9Player = (function () {
             }
             el('player').appendChild(frame);
             bootTimer = setTimeout(function () { if (!ready) fail('timeout'); }, 90000);
+        },
+        openEjsMenu: function () {
+            var a = api();
+            if (a && ready && a.openSettings) return a.openSettings();
+            return false;
         },
         pause: function () {
             // let go of everything held, so nothing stays pressed when the game comes back

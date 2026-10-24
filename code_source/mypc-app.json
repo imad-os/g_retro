@@ -1,0 +1,25 @@
+{
+  "mypc": 1,
+  "id": "retro9",
+  "name": "Retro9",
+  "description": "Browse your retro game library and play classic console and arcade ROMs with a game controller on My PC.",
+  "type": "game",
+  "entry": "index.html",
+  "icon": "icon.svg",
+  "version": "0.4.0",
+  "scores": false,
+  "config": {
+    "repos": [
+      { "name": "My ROMs", "url": "https://f2cfpkjp8z-alt.github.io/emulatorjs_rom_test/" }
+    ],
+    "default_repo": 0,
+    "autoload_last_save": "ask",
+    "systems_enabled": ["nes", "snes", "gb", "gbc", "gba", "segaMD", "segaMS", "segaGG", "n64", "nds", "arcade"],
+    "emulator_cdn": "https://cdn.emulatorjs.org/4.2.3/data/",
+    "save_states": true
+  },
+  "touch": {
+    "buttons": [ { "label": "A", "action": "b", "place": "right" }, { "label": "B", "action": "ok", "place": "bottom" } ],
+    "catalog": [ { "label": "A", "action": "b", "place": "right" }, { "label": "B", "action": "ok", "place": "bottom" }, { "label": "X", "action": "menu", "place": "top" } ]
+  }
+}

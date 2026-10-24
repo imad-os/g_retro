@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Writes roms.json for a ROM library folder, so Retro9 can list it from any static host (GitHub Pages lists no folders).
 //   node tools/make-roms-json.mjs <library folder>
-// Every game file found (by extension, or .bin / .zip inside a folder named after its system, e.g. "genesis/")
+// Every game file found (by extension, including .zip / .7z / .bin at any depth)
 // is listed with its path; a picture with the same name (or in a boxart/, covers/ or images/ folder next to it) becomes its art.
 import { readdirSync, statSync, writeFileSync } from 'node:fs';
 import { join, relative, extname, basename, dirname } from 'node:path';
@@ -9,8 +9,8 @@ import { join, relative, extname, basename, dirname } from 'node:path';
 const root = process.argv[2];
 if (!root) { console.error('usage: node tools/make-roms-json.mjs <library folder>'); process.exit(1); }
 
-const GAME = ['nes', 'unf', 'unif', 'sfc', 'smc', 'gb', 'gbc', 'gba', 'md', 'gen', 'smd', 'sms', 'gg', 'n64', 'z64', 'v64', 'nds'];
-const BY_FOLDER = ['bin', 'zip', '7z'];
+const GAME = ['nes', 'unf', 'unif', 'fds', 'sfc', 'smc', 'gb', 'gbc', 'gba', 'md', 'gen', 'smd', 'sms', 'gg', 'n64', 'z64', 'v64', 'nds', 'zip', '7z'];
+const BY_FOLDER = ['bin'];
 const IMAGE = ['png', 'jpg', 'jpeg', 'webp', 'gif'];
 
 const files = [];
