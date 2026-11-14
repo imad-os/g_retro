@@ -4,34 +4,23 @@
  *   (hold Start + Select, or the remote's Back) has Save state, Load state, EmulatorJS, Press Start, Restart, Exit to library. */
 (function () {
     'use strict';
-    var VERSION = '0.4.0', CHUNK = 60;
+    var VERSION = '0.6.0', CHUNK = 60;
     var DEFAULTS = {
-        repos: [{ name: 'My ROMs', url: 'https://f2cfpkjp8z-alt.github.io/emulatorjs_rom_test/' }],
         systems: ['nes', 'snes', 'gb', 'gbc', 'gba', 'segaMD', 'segaMS', 'segaGG', 'n64', 'nds', 'arcade'],
         cdn: 'https://cdn.emulatorjs.org/4.2.3/data/'
     };
     var t = R9Text.en, lang = 'en', info = null, cfg = null, volume = 0.7, unsub = [];
-    var repo = 0, path = '', listing = null, listState = 'loading', listErr = '', loadSeq = 0;
+    var sources = [], repo = 0, trail = [], path = '', listing = null, listState = 'loading', listErr = '', loadSeq = 0;
     var sections = [], focus = { s: 0, i: 0 }, remembered = {}, dialog = null, toastTimer = 0;
 
     function el(id) { return document.getElementById(id); }
     function make(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; }
     function fill(s, o) { return s.replace(/\{(\w+)\}/g, function (m, k) { return o && o[k] !== undefined ? o[k] : m; }); }
-    function cols() { return window.innerWidth < window.innerHeight ? 2 : 5; }
+    function cols() { return R9Settings.cols(window.innerWidth < window.innerHeight); }
 
     /* ---------- config (MyPC.app_config, with defaults) ---------- */
     function readConfig() {
-        var c = MyPC.app_config || {}, list = c.repos || c.repositories;
-        if (typeof list === 'string') list = [list];
-        if (!Array.isArray(list) && typeof c.default_repo_url === 'string') list = [c.default_repo_url];
-        if (!Array.isArray(list)) list = DEFAULTS.repos;
-        var repos = [];
-        list.forEach(function (r) {
-            if (typeof r === 'string') r = { url: r };
-            if (!r || typeof r.url !== 'string' || !/^https?:\/\//i.test(r.url)) return;
-            var name = typeof r.name === 'string' && r.name ? r.name : r.url.replace(/^https?:\/\//, '').replace(/\/$/, '').split('/').pop();
-            repos.push({ name: name.slice(0, 40), url: r.url });
-        });
+        var c = MyPC.app_config || {};
         var auto = c.autoload_last_save;
         var cdn = typeof c.emulator_cdn === 'string' && /^https:\/\//.test(c.emulator_cdn) ? c.emulator_cdn : DEFAULTS.cdn;
         var sysList = DEFAULTS.systems.slice();
@@ -42,8 +31,7 @@
             });
         }
         return {
-            repos: repos,
-            first: Math.max(0, Math.min(repos.length - 1, +c.default_repo || 0)),
+            first: c.default_source === 'drive' ? 'drive' : 'usb',
             autoload: auto === true || auto === false ? auto : 'ask',
             systems: sysList,
             cdn: /\/$/.test(cdn) ? cdn : cdn + '/',
@@ -110,8 +98,10 @@
     }
 
     /* ---------- the library screen ---------- */
-    function currentRepo() { return cfg.repos[repo] || null; }
+    function currentSrc() { return sources[repo] || null; }
+    function srcName(id) { return id === 'usb' ? t.srcUsb : t.srcDrive; }
     function isEnabled(g) {
+        if (!/^(usb|drive):/.test(g.url)) return false;
         var sys = R9Saves.getSystem(g.url) || g.system;
         return sys === 'auto' || cfg.systems.indexOf(sys) >= 0;
     }
@@ -121,18 +111,19 @@
         return (R9Systems.get(sys) || {}).label || '';
     }
     function load() {
-        var r = currentRepo(), seq = ++loadSeq;
+        var r = currentSrc(), seq = ++loadSeq;
         listing = null; listErr = '';
         if (!r) { listState = 'none'; render(); return; }
         listState = 'loading'; render();
-        R9Library.list(r, path).then(function (l) {
+        R9Library.list(r, path, trail.map(function (x) { return x.name; }).join('/')).then(function (l) {
             if (seq !== loadSeq) return;
+            l.folders.forEach(function (f) { if (f.shared) f.name = t.shared; });
             listing = l; listState = 'ok'; render();
-            MyPC.announce((path ? path.split('/').pop() : r.name) + '. ' + (l.folders.length + l.games.length));
+            MyPC.announce((trail.length ? trail[trail.length - 1].name : srcName(r)) + '. ' + (l.folders.length + l.games.length));
         }, function (e) {
             if (seq !== loadSeq) return;
             console.warn('[Retro9] library', e);
-            listState = 'error'; listErr = (e && (e.status || e.code)) || ''; render();
+            listState = 'error'; listErr = (e && e.code) || ''; render();
         });
     }
     function buildSections() {
@@ -147,10 +138,13 @@
             listing.folders.forEach(function (f) { items.push({ type: 'folder', f: f }); });
             listing.games.filter(isEnabled).forEach(function (g) { items.push({ type: 'game', g: g }); });
         } else if (listState === 'error') {
-            items.push({ type: 'retry' });
+            items.push({ type: listErr === 'signed-out' || listErr === 'reauth' ? 'signin' : 'retry' });
         }
-        out.push({ title: path ? path.split('/').pop() : (currentRepo() ? currentRepo().name : t.library), row: false, items: items, shown: 0 });
+        out.push({ title: trail.length ? trail[trail.length - 1].name : (currentSrc() ? srcName(currentSrc()) : t.library), row: false, items: items, shown: 0 });
         return out;
+    }
+    function errText() {
+        return listErr === 'noconfig' ? t.errNoConfig : listErr === 'denied' ? t.errDenied : listErr === 'unsupported' ? t.errUnsupported : t.noLib;
     }
     function card(it, sIdx, iIdx) {
         var c = make('div', 'card'), art = make('div', 'art'), img = make('img');
@@ -161,6 +155,7 @@
             activate();
         });
         if (it.type === 'folder') { img.src = R9Art.FOLDER; c.appendChild(art); art.appendChild(img); c.appendChild(make('div', 'name', it.f.name)); c.appendChild(make('div', 'sys', ' ')); return c; }
+        if (it.type === 'signin') { img.src = R9Art.RETRY; c.appendChild(art); art.appendChild(img); c.appendChild(make('div', 'name', t.signIn)); c.appendChild(make('div', 'sys', ' ')); return c; }
         if (it.type === 'retry') { img.src = R9Art.RETRY; c.appendChild(art); art.appendChild(img); c.appendChild(make('div', 'name', t.retry)); c.appendChild(make('div', 'sys', String(listErr))); return c; }
         var g = it.g;
         // All game files in the navigator use the same fixed-size icon geometry as folders
@@ -185,17 +180,18 @@
         sections = buildSections();
         // header: library tabs and where we are
         var tabs = el('tabs'); tabs.textContent = '';
-        if (cfg.repos.length > 1) {
+        if (sources.length > 1) {
             tabs.appendChild(make('span', 'key', 'LB'));
-            cfg.repos.forEach(function (r, i) { tabs.appendChild(make('span', 'tab' + (i === repo ? ' on' : ''), r.name)); });
+            sources.forEach(function (id, i) { tabs.appendChild(make('span', 'tab' + (i === repo ? ' on' : ''), srcName(id))); });
             tabs.appendChild(make('span', 'key', 'RB'));
         }
         var crumb = el('crumb'); crumb.textContent = '';
-        var r = currentRepo(), parts = path ? path.split('/') : [];
-        crumb.appendChild(make('b', '', r ? r.name : t.library));
-        parts.forEach(function (p) { crumb.appendChild(document.createTextNode('  ›  ' + p)); });
+        var r = currentSrc();
+        crumb.appendChild(make('b', '', r ? srcName(r) : t.library));
+        trail.forEach(function (p) { crumb.appendChild(document.createTextNode('  ›  ' + p.name)); });
         // sections
         var rows = el('rows'); rows.textContent = '';
+        rows.style.setProperty('--cols', cols());
         sections.forEach(function (sec, sIdx) {
             rows.appendChild(make('div', 'sec-title', sec.title));
             sec.box = make('div', sec.row ? 'row' : 'grid');
@@ -206,7 +202,7 @@
         });
         var grid = sections[sections.length - 1];
         if (!grid.items.length) {
-            var msg = listState === 'loading' ? t.loading : listState === 'none' ? t.noRepos : listState === 'error' ? t.noLib : t.empty;
+            var msg = listState === 'loading' ? t.loading : listState === 'none' ? t.noRepos : listState === 'error' ? errText() : (!path && currentSrc() === 'usb') ? t.noUsb : t.empty;
             rows.appendChild(make('div', 'empty', msg));
         }
         // focus: where it was in this folder, else the first card
@@ -238,7 +234,7 @@
         }
         if (!quiet) MyPC.announce(label(sections[s].items[i]));
     }
-    function label(it) { return it.type === 'folder' ? it.f.name : it.type === 'retry' ? t.retry : it.g.name + ', ' + sysLabel(it.g); }
+    function label(it) { return it.type === 'folder' ? it.f.name : it.type === 'signin' ? t.signIn : it.type === 'retry' ? t.retry : it.g.name + ', ' + sysLabel(it.g); }
     function focused() { return focus.s >= 0 && sections[focus.s] ? sections[focus.s].items[focus.i] : null; }
 
     function move(dir) {
@@ -263,20 +259,21 @@
     function activate() {
         var it = focused();
         if (!it) return;
-        if (it.type === 'retry') { R9Library.forget(currentRepo()); load(); }
-        else if (it.type === 'folder') { path = it.f.path; load(); }
+        if (it.type === 'retry') load();
+        else if (it.type === 'signin') R9Library.signIn().then(load, function (e) { toast(e && e.code === 'denied' ? t.errDenied : t.noLib); });
+        else if (it.type === 'folder') { trail.push({ name: it.f.name, path: it.f.path }); path = it.f.path; load(); }
         else launch(it.g, null);
     }
     function back() {
-        if (!path) return;
-        var i = path.lastIndexOf('/');
-        path = i < 0 ? '' : path.slice(0, i);
+        if (!trail.length) return;
+        trail.pop();
+        path = trail.length ? trail[trail.length - 1].path : '';
         load();
     }
     function switchRepo(d) {
-        if (cfg.repos.length < 2) return;
-        repo = (repo + d + cfg.repos.length) % cfg.repos.length;
-        path = '';
+        if (sources.length < 2) return;
+        repo = (repo + d + sources.length) % sources.length;
+        trail = []; path = '';
         load();
     }
     function toggleFav(g) {
@@ -303,8 +300,8 @@
     function openSettings() {
         var opts = R9Settings.LIST.map(function (s) { return { key: s.key, label: settingLabel(s.key) }; });
         opts.push({ label: t.resetSet, fn: function () { R9Settings.reset(); openSettings(); } });
-        opts.push({ label: t.done, fn: null });
-        showDialog(t.settings, t.setHint, opts, null, 'compact');
+        opts.push({ label: t.done, fn: render });
+        showDialog(t.settings, t.setHint, opts, render, 'compact');
     }
 
     /* ---------- playing ---------- */
@@ -334,10 +331,7 @@
         el('player').hidden = false;
         el('app').style.display = 'none';          // nothing of the library is drawn under the game
         MyPC.announce(fill(t.loadingGame, { name: g.name }));
-        var rom = R9Net.get(g.url, 'arraybuffer', 180000).catch(function (e) {
-            if (e && e.code === 'too-big') return null;          // over 32 MB: the emulator downloads it itself
-            throw e;
-        });
+        var rom = R9Library.read(g, function (p) { el('loading').textContent = fill(t.loadingGame, { name: g.name }) + ' ' + Math.round(p * 100) + '%'; });
         Promise.all([rom, R9Saves.get(g.url, 'sram'), state === null ? R9Saves.get(g.url, 'auto') : Promise.resolve(null)]).then(function (r) {
             var data = r[0], sram = r[1] && r[1].sram, auto = r[2];
             var detected = data ? R9Systems.detectRom(data, g.path || g.url) : (knownSys !== 'auto' ? knownSys : R9Systems.detect(g.path || g.url));
@@ -383,7 +377,7 @@
             console.warn('[Retro9] rom', e);
             el('player').hidden = true;
             el('app').style.display = '';
-            toast(t.failRom);
+            toast(e && e.code === 'signed-out' ? t.errSignedOut : e && e.code === 'gone' ? t.errGone : t.failRom);
         });
     }
 
@@ -424,7 +418,7 @@
         [['bottom', t.open], ['right', t.back], ['left', t.options], ['top', t.favourite]].forEach(function (p) {
             var s = make('span'); s.appendChild(diamond(p[0])); s.appendChild(document.createTextNode(p[1])); f.appendChild(s);
         });
-        if (cfg.repos.length > 1) { var s = make('span'); s.appendChild(make('span', 'key', 'LB')); s.appendChild(document.createTextNode(' ')); s.appendChild(make('span', 'key', 'RB')); s.appendChild(document.createTextNode(' ' + t.switchLib)); f.appendChild(s); }
+        if (sources.length > 1) { var s = make('span'); s.appendChild(make('span', 'key', 'LB')); s.appendChild(document.createTextNode(' ')); s.appendChild(make('span', 'key', 'RB')); s.appendChild(document.createTextNode(' ' + t.switchLib)); f.appendChild(s); }
         var st = make('span'); st.appendChild(make('span', 'key', 'Select')); st.appendChild(document.createTextNode(' ' + t.settings)); f.appendChild(st);
     }
 
@@ -439,7 +433,8 @@
             document.documentElement.lang = lang;
             volume = i.volume ? i.volume.music : 0.7;
             cfg = readConfig();
-            repo = cfg.first;
+            sources = R9Library.available();
+            repo = Math.max(0, sources.indexOf(cfg.first));
             R9Saves.init(i);
             R9Settings.init();
             menus();
@@ -471,7 +466,7 @@
                 else openSettings();
                 return;
             }
-            if (id === 'reload') { R9Library.forget(currentRepo() || {}); load(); return; }
+            if (id === 'reload') { load(); return; }
             if (!R9Player.active()) return;
             if (id === 'qsave') R9Player.quickSave().then(function (r) { toast(!r ? t.notSaved : r.device ? t.saved : t.savedSession); });
             else if (id === 'qload') R9Player.quickLoad().then(function (ok) { toast(ok ? t.loaded : t.noQuick); });

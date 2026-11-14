@@ -3,6 +3,7 @@
 var R9Settings = (function () {
     'use strict';
     var LIST = [
+        { key: 'iconSize',    values: ['large', 'medium', 'small', 'tiny'],                                def: 'small',    names: ['iconL', 'iconM', 'iconS', 'iconT'] },
         { key: 'scale',       values: [0.5, 0.75, 1],                                                       def: 0.5,        names: ['50%', '75%', '100%'] },
         { key: 'shader',      values: ['disabled', 'crt-easymode.glslp', 'crt-aperture.glslp', 'crt-geom.glslp'], def: 'disabled', names: ['vOff', 'shEasy', 'shAperture', 'shGeom'] },
         { key: 'fastForward', values: [false, true],                                                        def: false,      names: ['vOff', 'vOn'] },
@@ -19,6 +20,8 @@ var R9Settings = (function () {
         { key: 'fps',         values: [false, true],                                                        def: false,      names: ['vOff', 'vOn'] }
     ];
     var cur = {};
+    // game icons per row: landscape (TV, computer) and portrait (phone)
+    var COLS = { large: [5, 2], medium: [7, 3], small: [9, 4], tiny: [11, 5] };
 
     function reset() { LIST.forEach(function (s) { cur[s.key] = s.def; }); }
     reset();
@@ -28,6 +31,7 @@ var R9Settings = (function () {
             var v = MyPC.load('settings', null);
             if (v && typeof v === 'object') LIST.forEach(function (s) { if (s.values.indexOf(v[s.key]) >= 0) cur[s.key] = v[s.key]; });
         },
+        cols: function (portrait) { return COLS[cur.iconSize][portrait ? 1 : 0]; },
         all: function () { var o = {}; for (var k in cur) o[k] = cur[k]; return o; },
         get: function (k) { return cur[k]; },
         // move a setting by one value (d = 1 or -1), wrapping around
