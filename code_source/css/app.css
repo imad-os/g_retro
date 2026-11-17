@@ -17,7 +17,7 @@ header { display: flex; align-items: center; gap: 2vw; height: 8vh; flex: none; 
 #rows { padding: 1vh 0.5vw 6vh; }
 .sec-title { font-size: 3.2vh; font-weight: 700; margin: 1.5vh 0 1.5vh; color: #ffd23f; }
 .row { display: flex; gap: 1.6vw; overflow: hidden; padding: 1.5vh 1.5vh; }
-.row .card { flex: 0 0 calc((100% - 6.4vw) / 5); width: calc((100% - 6.4vw) / 5); }
+.row .card { flex: 0 0 calc((100% - (var(--cols, 5) - 1) * 1.6vw) / var(--cols, 5)); width: calc((100% - (var(--cols, 5) - 1) * 1.6vw) / var(--cols, 5)); }
 .grid { display: grid; grid-template-columns: repeat(var(--cols, 5), minmax(0, 1fr)); gap: 3vh 1.6vw; padding: 1.5vh 1.5vh; }
 
 .card { min-width: 0; border-radius: 1.6vh; background: #1e2447; outline: 0.6vh solid transparent; outline-offset: 0.3vh; transition: transform 0.12s; }
@@ -25,8 +25,8 @@ header { display: flex; align-items: center; gap: 2vw; height: 8vh; flex: none; 
 .art { width: 100%; aspect-ratio: 1 / 1; border-radius: 1.6vh 1.6vh 0 0; overflow: hidden; background: #232a4d; position: relative; display: flex; align-items: center; justify-content: center; }
 .art img { width: 100%; height: 100%; object-fit: contain; display: block; flex: none; }
 .fav { position: absolute; top: 1vh; right: 1vh; font-size: 3.4vh; color: #ffd23f; }
-.name { font-size: 3vh; padding: 1vh 1vw 0.4vh; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.sys { font-size: 2.4vh; padding: 0 1vw 1.2vh; color: #b9bfe6; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.name { font-size: max(1.7vh, calc(15vh / var(--cols, 5))); padding: 1vh 1vw 0.4vh; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sys { font-size: max(1.4vh, calc(12vh / var(--cols, 5))); padding: 0 1vw 1.2vh; color: #b9bfe6; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .empty { font-size: 3.4vh; color: #b9bfe6; padding: 6vh 1vw; line-height: 1.5; }
 
 footer { height: 8vh; flex: none; display: flex; gap: 2.4vw; align-items: center; font-size: 2.6vh; color: #b9bfe6; white-space: nowrap; overflow: hidden; }
@@ -51,7 +51,6 @@ footer { height: 8vh; flex: none; display: flex; gap: 2.4vw; align-items: center
 
 @media (max-aspect-ratio: 1/1) {
   #app { padding: 3vh 4vw 0; }
-  .row .card { flex-basis: calc((100% - 3.2vw) / 2.4); width: calc((100% - 3.2vw) / 2.4); }
   footer { font-size: 2vh; gap: 3vw; }
   .box, .box.compact { width: 90vw; }
 }

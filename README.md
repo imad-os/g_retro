@@ -19,39 +19,32 @@ Site: `https://imad-os.github.io/g_retro/` (paste it into the App Store Manager,
 | In a game | every button, both triggers, both sticks | the emulated pad (up to 4 controllers, one player each) |
 | | hold Start + Select 1 s (or the TV remote's Back) | My PC's pause menu: Save state, Load state, Press Start, Press Select, Restart game, Exit to library |
 
-## Libraries (app config)
+## Libraries: USB and Google Drive
+
+Games are read only through My PC's own functions; there is no web address or GitHub repository to set up.
+LB / RB switch between the two sources:
+
+- **USB**: the USB drives plugged into the TV (`MyPC.usb`, TV only). Browse the folders and open a game.
+- **Google Drive**: your whole Drive and "Shared with me" (`MyPC.drive`). Sign in once from the app (or in My PC,
+  Control Panel > Google Drive). Files up to 200 MB.
+
+A folder named after the system (`nes/`, `snes/`, `genesis/`, `gba/`...) or a known file extension tells Retro9 which
+emulator to use. A source that My PC cannot offer (no USB drives on a phone) is hidden.
 
 Set in the App Store Manager → Config (defaults are in `mypc-app.json`):
 
 | Key | Default | What |
 |---|---|---|
-| `repos` | `[{ "name": "My ROMs", "url": "https://f2cfpkjp8z-alt.github.io/emulatorjs_rom_test/" }]` | libraries, switched with LB / RB |
-| `default_repo` | `0` | the library shown first (index in `repos`) |
+| `default_source` | `"usb"` | the source shown first: `"usb"` or `"drive"` |
 | `autoload_last_save` | `"ask"` | `"ask"`, `true` (always continue) or `false` (always start fresh) |
 | `systems_enabled` | `nes snes gb gbc gba segaMD segaMS segaGG` | add `n64`, `nds`, `arcade` to try the heavy systems (slow on TVs) |
 | `emulator_cdn` | `https://cdn.emulatorjs.org/4.2.3/data/` | EmulatorJS files, pinned so an upstream update cannot break the TV app |
 | `save_states` | `true` | `false` keeps only the games' own battery saves |
 
-A library address is read in this order:
+## Icon size
 
-1. a game list `roms.json` (or `index.json`, `manifest.json`) at the address, or the address itself if it ends in `.json`
-2. a GitHub repository: `https://github.com/owner/repo` or its GitHub Pages site `https://owner.github.io/repo/`
-   (the whole tree in one request; files are downloaded from the Pages site or raw.githubusercontent.com)
-3. an HTML page of links (a web server that lists its folders)
-
-GitHub Pages never lists folders, so a game list is the most reliable. Make one with
-`node tools/make-roms-json.mjs <library folder>`:
-
-```json
-{ "name": "My ROMs", "games": [
-  { "file": "snes/Some Game.sfc", "name": "Some Game", "art": "snes/Some Game.png" },
-  { "file": "genesis/Other.bin", "system": "segaMD" }
-] }
-```
-
-Folders come from the paths. `system` is only needed when the extension does not say it (`.bin`, `.zip`), and a folder
-named after the system (`genesis/`, `snes/`, `gba/`...) also says it. A picture with the same name, or in a `boxart/`,
-`covers/` or `images/` folder next to the game, becomes its art; otherwise a card is drawn.
+Settings (Select) > **Icon size**: Large (5 per row), Medium (7), Small (9, default), Tiny (11); on a phone 2 / 3 / 4 / 5.
+Every game and folder icon has the same size.
 
 ## Speed settings
 

@@ -141,7 +141,7 @@ var R9Player = (function () {
             close();
             opts = o; game = g; on = true; ready = false; resetInput();
             var sys = R9Systems.get(g.system);
-            cfg = { core: sys.core, data: data, url: data ? '' : g.url, name: decodeURIComponent(g.url.split('/').pop().split(/[?#]/)[0]),
+            cfg = { core: sys.core, data: data, url: data ? '' : g.url, name: String(g.path || '').split('/').pop() || g.name,
                     cdn: o.cdn, volume: o.volume, perf: o.perf, sram: saves.sram || null, state: saves.state || null };
             el('loading').textContent = o.loadingText;
             el('player').hidden = false;
