@@ -27,6 +27,7 @@ const APP_FILES = [
     'js/settings.js',
     'js/player.js',
     'js/app.js',
+    'BIOS/neogeo.zip',
     'tools/make-roms-json.mjs'
 ];
 

@@ -47,12 +47,37 @@
         g.loadSaveFiles();
     }
 
+    var BIOS_BASE_URL = 'https://imad-os.github.io/g_retro/BIOS';
+    var biosUrl = BIOS_BASE_URL + '/neogeo.zip';
+    var killed = false;
+
+    function needsNeoGeoBios(core) {
+        return core === 'arcade' || core === 'fbneo' || core === 'neogeo';
+    }
+    function loadNeoGeoBios() {
+        return fetch(biosUrl).then(function (r) {
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            return r.arrayBuffer();
+        }).catch(function () {
+            return fetch('BIOS/neogeo.zip').then(function (r) {
+                if (!r.ok) throw new Error('HTTP ' + r.status);
+                return r.arrayBuffer();
+            });
+        }).then(function (buf) {
+            return new Uint8Array(buf);
+        }).catch(function (e) {
+            console.warn('[Retro9] Neo Geo BIOS not loaded', e);
+            return null;
+        });
+    }
+
     // RetroArch settings EmulatorJS does not expose (audio buffer, audio sync, sound on/off): edit the retroarch.cfg it
     // writes. EJS_GameManager is defined by the loader before the core is downloaded, so the change is in place in time.
     var raExtra = null;
     function patchCfg(GM) {
         if (!GM || !GM.prototype || GM.prototype.r9Patched) return;
         var orig = GM.prototype.getRetroArchCfg;
+        var origWrite = GM.prototype.writeFile;
         GM.prototype.r9Patched = true;
         GM.prototype.getRetroArchCfg = function () {
             var cfg = orig.apply(this, arguments);
@@ -63,6 +88,13 @@
             });
             return cfg;
         };
+        if (origWrite) {
+            GM.prototype.writeFile = function (path, data) {
+                // EmulatorJS 4.2.3 loadExternalFiles() passes an ArrayBuffer to writeFile(), which writes 0 bytes in Emscripten FS
+                if (data instanceof ArrayBuffer) data = new Uint8Array(data);
+                return origWrite.call(this, path, data);
+            };
+        }
     }
     var gmClass, ejsClass;
     Object.defineProperty(window, 'EJS_GameManager', {
@@ -172,10 +204,25 @@
                 if (paused) R9P.pause();
                 tell('started');
             };
-            var s = document.createElement('script');
-            s.src = cfg.cdn + 'loader.js';
-            s.onerror = function () { tell('error', 'emulator'); };
-            document.body.appendChild(s);
+            var startLoader = function () {
+                if (killed) return;
+                var s = document.createElement('script');
+                s.src = cfg.cdn + 'loader.js';
+                s.onerror = function () { tell('error', 'emulator'); };
+                document.body.appendChild(s);
+            };
+            if (needsNeoGeoBios(cfg.core)) {
+                loadNeoGeoBios().then(function (biosData) {
+                    if (killed) return;
+                    window.EJS_externalFiles = { '/neogeo.zip': biosData || biosUrl };
+                    if (biosData) {
+                        window.EJS_externalFiles['/home/web_user/retroarch/userdata/system/neogeo.zip'] = biosData;
+                    }
+                    startLoader();
+                });
+            } else {
+                startLoader();
+            }
         },
         input: function (player, index, value) { var g = gm(); if (started && g) g.simulateInput(player, index, value); },
         isSettingsOpen: function () {
@@ -277,6 +324,7 @@
         restart: function () { var g = gm(); if (started && g) g.restart(); },
         // before the frame is removed: stop the loop, the sound and the GPU context
         kill: function () {
+            killed = true;
             var e = emu();
             try { if (e && started) e.pause(true); } catch (x) {}
             each(function (c) { if (c.state !== 'closed') c.close(); });

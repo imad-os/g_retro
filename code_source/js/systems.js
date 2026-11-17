@@ -68,6 +68,7 @@ var R9Systems = (function () {
     // the system id for a file path, 'auto' when an archive needs binary inspection on launch, or '' when not a game
     function detect(path, given) {
         if (given && LIST[given]) return given;
+        if (given && HINTS[String(given).toLowerCase()]) return HINTS[String(given).toLowerCase()];
         var e = ext(path);
         if (BY_EXT[e]) return BY_EXT[e];
         if (e === 'zip' || e === '7z' || e === 'rar' || e === 'bin') {
