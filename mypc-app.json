@@ -6,7 +6,7 @@
   "type": "game",
   "entry": "index.html",
   "icon": "icon.svg",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "scores": false,
   "config": {
     "default_source": "usb",
